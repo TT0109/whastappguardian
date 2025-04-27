@@ -2,19 +2,22 @@
 
 import { useEffect, useRef } from 'react'
 import { useChatStore } from '@/app/store/chatStore'
+import { usePathname } from 'next/navigation'
 
 export default function AutoNotifications() {
   const { contacts, addMessage } = useChatStore()
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-
-
-
-  
-
+  const pathname = usePathname()
   
   // Using useEffect with proper dependencies
   useEffect(() => {
+    // Check if we're on a route where notifications should be shown
+    const shouldShowNotifications = pathname === '/whatsapp' || pathname.startsWith('/chat/');
+    
+    // Only run if we're on the correct routes
+    if (!shouldShowNotifications) {
+      return;
+    }
     // Sample text messages that will be randomly sent
     const sampleTextMessages = [
       'Oi, tudo bem?',
@@ -124,7 +127,7 @@ export default function AutoNotifications() {
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [contacts, addMessage])
+  }, [contacts, addMessage, pathname])
   
   // This component doesn't render anything
   return null
