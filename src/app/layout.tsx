@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AutoNotifications from "./components/AutoNotifications";
+import AutoUserMessages from "./components/AutoUserMessages";
+import { PaymentProvider } from "./components/payment/PaymentContext";
+import { Suspense } from "react";
+import gtmBody from "./scripts/gtm-body";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +32,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <div dangerouslySetInnerHTML={{ __html: gtmBody }} />
+       <Suspense>
+        <PaymentProvider>
+          {children}
+          <AutoNotifications />
+          <AutoUserMessages />
+        </PaymentProvider>
+        </Suspense>
       </body>
     </html>
   );
