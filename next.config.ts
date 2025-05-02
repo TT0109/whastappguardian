@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
     INSTAGRAM_RAPIDAPI_KEY: '86bf04e7f5mshadf0cf3d655fe22p18860fjsn0b5d6c8644d0',
     WHATSAPP_API_URL: 'https://whatsapp-data1.p.rapidapi.com',
     WHATSAPP_API_HEADER_HOST: 'whatsapp-data1.p.rapidapi.com',
-    WHATSAPP_RAPIDAPI_KEY: '86bf04e7f5mshadf0cf3d655fe22p18860fjsn0b5d6c8644d0',
+    WHATSAPP_RAPIDAPI_KEY: '1fc33ddd2fmsh09294d4a75ba5b3p1eb72bjsn657681542060',
   },
 };
 
