@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, ReactNode } from 'react'
+import { useSearchParmsStore } from '../../store/searchParams'
 
 // Tipos de planos disponíveis
 export type PlanType = 'monthly' | 'yearly'
@@ -33,9 +34,9 @@ interface PaymentContextType {
 
 // Valores padrão
 const defaultPrices: PriceData = {
-  monthly: 'R$ 37,90',
+  monthly: 'R$ 39,90',
   yearly: 'R$ 97,90',
-  monthlyRaw: 37.90,
+  monthlyRaw: 39.90,
   yearlyRaw: 97.90
 }
 
@@ -46,7 +47,7 @@ const PaymentContext = createContext<PaymentContextType | undefined>(undefined)
 export function PaymentProvider({ children }: { children: ReactNode }) {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('monthly')
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
-  
+  const getQueryString = useSearchParmsStore(state => state.getQueryString)
   // Preços fixos
   const prices = defaultPrices
   
@@ -58,7 +59,26 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
   
   // Processar pagamento (simulação)
   const processPayment = () => {
-    alert('Redirecionando para página de pagamento...')
+    const paymentLinks = {
+      monthly: 'https://go.perfectpay.com.br/PPU38CONE51', // 39,90
+      yearly: 'https://go.perfectpay.com.br/PPU38CONE53'   // 97,90
+    }
+    
+    const planValues = {
+      monthly: 37.90,
+      yearly: 97.90
+    }
+    
+    localStorage.setItem('checkout', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      plan: selectedPlan,
+      value: planValues[selectedPlan],
+      formattedValue: prices[selectedPlan],
+      source: window.location.pathname
+    }))
+    
+    const queryString = getQueryString('?')
+    window.location.href = `${paymentLinks[selectedPlan]}${queryString}`
     closePaymentModal()
   }
   
