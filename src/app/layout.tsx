@@ -7,6 +7,8 @@ import { PaymentProvider } from "./components/payment/PaymentContext";
 import { Suspense } from "react";
 import gtmBody from "./scripts/gtm-body";
 import Head from "./head";
+import { PromotionProvider } from "./components/PromotionContext";
+import PromotionTimer from "./components/PromotionTimer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,11 +38,14 @@ export default function RootLayout({
         <div dangerouslySetInnerHTML={{ __html: gtmBody }} />
         <Head />
        <Suspense>
-        <PaymentProvider>
-          {children}
-          <AutoNotifications />
-          <AutoUserMessages />
-        </PaymentProvider>
+        <PromotionProvider>
+          <PromotionTimer />
+          <PaymentProvider>
+            {children}
+            <AutoNotifications />
+            <AutoUserMessages />
+          </PaymentProvider>
+        </PromotionProvider>
         </Suspense>
       </body>
     </html>

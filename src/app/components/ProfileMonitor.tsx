@@ -1,45 +1,195 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import './ProfileMonitor.css'
 import { useRouter } from 'next/navigation'
 import { usePhoneStore } from '../store/phoneStore'
+import SmartPlayerVideo from './SmartPlayerVideo'
+import { usePromotion } from './PromotionContext'
 
 export default function ProfileMonitor() {
   const router = useRouter()
   const { profileImage } = usePhoneStore()
+  const { startPromotion, stopPromotion } = usePromotion()
   const [progress, setProgress] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(true)
+  const videoFinishedRef = useRef(false)
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
+  const [showCtaButton, setShowCtaButton] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState('Processando...')
+  const [showResults, setShowResults] = useState(false)
+  const [suspiciousMessages, setSuspiciousMessages] = useState(0)
+  const [suspiciousPhotos, setSuspiciousPhotos] = useState(0)
+  const [suspiciousLocations, setSuspiciousLocations] = useState(0)
+  const [videoEnded, setVideoEnded] = useState(false)
   const [redirectTriggered, setRedirectTriggered] = useState(false)
+  const [videoTotalTime, setVideoTotalTime] = useState(0)
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0)
+  const [showCTA, setShowCTA] = useState(false)
+  const [timeRemaining, setTimeRemaining] = useState(0)
+  const ctaRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100 && !redirectTriggered) {
-          clearInterval(progressInterval)
-          setRedirectTriggered(true)
-          return 100
-        }
-        return prev + 0.3
-      })
-    }, 50)
-
-    return () => {
-      clearInterval(progressInterval)
-    }
-  }, [redirectTriggered])
+  // Show results after specific time or when video ends
+  const handleShowResults = useCallback(() => {
+    setShowResults(true);
+    setSuspiciousMessages(5);
+    setSuspiciousPhotos(7);
+    setSuspiciousLocations(2);
+    setProcessingStatus('Análise concluída!');
+    setShowCtaButton(true);
+  }, [])  // Empty dependency array since these setters don't change
   
-  // Separate effect for redirection to avoid loop
-  useEffect(() => {
-    if (redirectTriggered) {
-      const redirectTimer = setTimeout(() => {
-        router.push('/whatsapp/')
-      }, 3000)
+  // Handle video end event
+  const handleVideoEnd = () => {
+    console.log('Video ended event received in ProfileMonitor')
+    setVideoEnded(true)
+    setShowCTA(true)
+    // Não iniciar o contador de promoção aqui, apenas quando faltar 4:30
+    // Scroll to CTA button
+    setTimeout(() => {
+      if (ctaRef.current) {
+        ctaRef.current.scrollIntoView({ behavior: 'smooth' })
+      }
+    }, 500)
+  }
+  
+  // Handle video progress updates
+  const handleVideoProgress = (progressValue: number) => {
+    setProgress(progressValue)
+    
+    // Update video time if we have total duration
+    if (videoTotalTime > 0) {
+      const currentTime = (progressValue / 100) * videoTotalTime
+      setVideoCurrentTime(currentTime)
       
-      return () => clearTimeout(redirectTimer)
+      // Calcular tempo restante em minutos e segundos
+      const remainingTime = (videoTotalTime - currentTime) / 60
+      const remainingSeconds = (videoTotalTime - currentTime)
+      
+      console.log(`Tempo restante: ${remainingSeconds.toFixed(1)} segundos (${remainingTime.toFixed(2)} minutos)`)
+      
+      // Mostrar CTA quando faltarem 5 minutos ou menos para o fim do vídeo
+      if (remainingTime <= 5 && !showCTA) {
+        console.log('Faltam 5 minutos ou menos, mostrando CTA')
+        setShowCTA(true)
+        handleShowResults() // Mostrar os resultados
+        
+        // Scroll para o CTA button
+        setTimeout(() => {
+          if (ctaRef.current) {
+            ctaRef.current.scrollIntoView({ behavior: 'smooth' })
+          }
+        }, 1000)
+      }
+      
+      // Verificar se faltam aproximadamente 4:30 minutos (entre 269 e 271 segundos)
+      // Usamos uma janela pequena para garantir que não ativamos várias vezes
+      if (remainingSeconds <= 271 && remainingSeconds >= 269) {
+        console.log(`*** INICIANDO PROMOÇÃO *** Faltam exatamente 4:30 minutos (${Math.floor(remainingSeconds)} segundos)`)
+        
+        // Limpar completamente qualquer estado anterior da promoção
+        localStorage.removeItem('promotionActive')
+        localStorage.removeItem('promotionEndTime')
+        localStorage.removeItem('promotionStarted')
+        
+        // Pequeno delay para garantir que o timer seja reiniciado corretamente
+        setTimeout(() => {
+          // Iniciar a promoção com 10 minutos
+          startPromotion()
+          console.log('Promoção ativada com 10 minutos de tempo')
+        }, 100)
+      }
+      
+      // Se o usuário voltar o vídeo para antes de 6 minutos do final, esconder o CTA e os resultados
+      if (remainingTime > 6 && showCTA) {
+        console.log('Voltou para antes de 6 minutos, escondendo CTA e resultados')
+        setShowCTA(false)
+        setShowResults(false)
+        setShowCtaButton(false)
+        setProcessingStatus('Processando...')
+        stopPromotion() // Parar o contador de promoção
+        localStorage.removeItem('promotionStarted') // Permitir que o contador seja iniciado novamente
+      }
+      
+      // Se o usuário voltar o vídeo para 10 minutos ou mais do final, esconder o contador de promoção
+      if (remainingTime >= 10) {
+        console.log('Voltou para 10 minutos ou mais, escondendo contador de promoção')
+        localStorage.setItem('promotionActive', 'false')
+        localStorage.removeItem('promotionStarted') // Permitir que o contador seja iniciado novamente
+        stopPromotion() // Parar o contador de promoção
+      }
     }
-  }, [redirectTriggered, router])
+  }
+  
+  // Update time remaining
+  useEffect(() => {
+    if (videoTotalTime > 0) {
+      const remaining = Math.max(0, Math.floor(videoTotalTime - videoCurrentTime))
+      setTimeRemaining(remaining)
+      
+      // Verificar se faltam 5 minutos (300 segundos) para o fim do vídeo
+      if (remaining <= 300 && !showCTA) {
+        console.log(`Faltam ${remaining} segundos, mostrando CTA`)
+        setShowCTA(true)
+        handleShowResults() // Mostrar os resultados
+        
+        // Scroll para o CTA button
+        setTimeout(() => {
+          if (ctaRef.current) {
+            ctaRef.current.scrollIntoView({ behavior: 'smooth' })
+          }
+        }, 1000)
+      }
+      
+      // Já estamos verificando no handleVideoProgress, não precisamos verificar aqui novamente
+      
+      // Se o usuário voltar o vídeo para antes de 6 minutos (360 segundos) do final, esconder o CTA e os resultados
+      if (remaining > 360 && showCTA) {
+        console.log(`Voltou para ${remaining} segundos, escondendo CTA e resultados`)
+        setShowCTA(false)
+        setShowResults(false)
+        setShowCtaButton(false)
+        setProcessingStatus('Processando...')
+        stopPromotion() // Parar o contador de promoção
+        localStorage.removeItem('promotionStarted') // Permitir que o contador seja iniciado novamente
+      }
+      
+      // Se o usuário voltar o vídeo para 10 minutos (600 segundos) ou mais do final, esconder o contador de promoção
+      if (remaining >= 600) {
+        console.log(`Voltou para ${remaining} segundos (10+ minutos), escondendo contador de promoção`)
+        localStorage.setItem('promotionActive', 'false')
+        localStorage.removeItem('promotionStarted') // Permitir que o contador seja iniciado novamente
+        stopPromotion() // Parar o contador de promoção
+      }
+    }
+  }, [videoCurrentTime, videoTotalTime, showCTA, handleShowResults, startPromotion, stopPromotion])
+  
+  // Handle redirect countdown
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+    
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown(redirectCountdown - 1);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (redirectCountdown === 0) {
+      // When countdown reaches zero, show the CTA button
+      setShowCtaButton(true);
+      setProcessingStatus('Verificando as mensagens...');
+      
+      // If video has ended and we haven't triggered redirect yet
+      if (videoEnded && !redirectTriggered) {
+        setRedirectTriggered(true);
+
+        setTimeout(() => {
+          router.push('/whatsapp');
+        }, 3000);
+      }
+    }
+  }, [redirectCountdown, videoEnded, redirectTriggered, router]);
 
   const toggleVideo = () => {
     setIsVideoPlaying(!isVideoPlaying)
@@ -58,51 +208,29 @@ export default function ProfileMonitor() {
         {/* Video Player */}
         <div className="relative w-full rounded-xl overflow-hidden border-2 border-gradient-to-r from-green-400 to-green-600 mb-6">
           <div className="aspect-video bg-gray-900 flex items-center justify-center">
-            <div className="relative w-full h-full">
-              <Image 
-                src="/video-thumbnail.jpg" 
-                alt="Video Thumbnail" 
-                fill
-                className="object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "https://via.placeholder.com/640x360/1e1e1e/ffffff?text=Video+Thumbnail";
-                }}
-              />
-            </div>
-            {!isVideoPlaying && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-white opacity-80" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                </svg>
-              </div>
-            )}
+            {/* SmartPlayer Video Component */}
+            <SmartPlayerVideo
+              onVideoEnd={handleVideoEnd}
+              onVideoProgress={handleVideoProgress}
+              onVideoDurationChange={(duration) => {
+                console.log('Video duration received in ProfileMonitor:', duration);
+                setVideoTotalTime(duration);
+              }}
+            />
+            
+            {/* Loading indicator on top of the player */}
+            {/* <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            </div> */}
           </div>
-          
-          {/* Video Controls */}
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black to-transparent">
-            <div className="flex items-center">
-              <button 
-                onClick={toggleVideo}
-                className="w-8 h-8 rounded-full bg-black bg-opacity-50 flex items-center justify-center mr-2"
-              >
-                {isVideoPlaying ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </button>
-              <div className="flex-1">
-                <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-400 to-green-600 w-1/4"></div>
-                </div>
-              </div>
+          {/* <div className="mt-2 px-4">
+            <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-green-400 to-green-600" 
+                style={{ width: `${progress}%` }}
+              ></div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Profile Image with wave animation */}
@@ -145,7 +273,16 @@ export default function ProfileMonitor() {
 
         {/* Processing Status */}
         <div className="text-gray-400 text-center mb-2">
-          Processando...
+          {videoEnded ? 'Processamento concluído!' : (
+            <div className="flex items-center justify-center space-x-2">
+              <span>Processando...</span>
+              {timeRemaining > 0 && (
+                <span className="text-pink-500 font-bold">
+                  Tempo restante: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Progress Bar */}
@@ -158,9 +295,35 @@ export default function ProfileMonitor() {
           </div>
         </div>
 
+        {/* CTA Button */}
+        {showCTA && (
+          <div 
+            ref={ctaRef} 
+            className="mb-8 smartplayer-scroll-event"
+          >
+            <button 
+              onClick={() => {
+                setRedirectTriggered(true);
+                setTimeout(() => {
+                  router.push('/whatsapp');
+                }, 500);
+              }}
+              className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 text-white font-bold text-xl rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
+            >
+              <span>VERIFICAR AGORA</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <div className="text-center text-sm text-pink-500 mt-2 animate-pulse">
+              Análise completa disponível por tempo limitado!
+            </div>
+          </div>
+        )}
+        
         {/* Suspicious Data Section */}
         <div className="mb-6">
-          <h3 className="text-2xl font-bold mb-4 text-green-500">Dados suspeitos detectados:</h3>
+          <h2 className="text-xl font-bold mb-2 text-center text-red-500">Dados suspeitos detectados:</h2>
           
           {/* Suspicious Messages */}
           <div className="bg-gray-900 rounded-lg p-4 mb-3 hover:bg-gray-800 transition-colors">
@@ -171,12 +334,24 @@ export default function ProfileMonitor() {
                 </svg>
                 <div>
                   <div className="font-bold">Mensagens suspeitas</div>
-                  <div className="text-xs text-green-700">*Analisando conversas e mensagens diretas...</div>
+                  {showResults ? (
+                    <div>
+                      <div className="text-xs text-red-500 font-bold">5 mensagens suspeitas detectadas</div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-green-700">*{processingStatus}</div>
+                  )}
                 </div>
               </div>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              {!showResults ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              )}
             </div>
           </div>
           
@@ -189,12 +364,22 @@ export default function ProfileMonitor() {
                 </svg>
                 <div>
                   <div className="font-bold">Imagens suspeitas</div>
-                  <div className="text-xs text-green-700">*Verificando conteúdo de imagens compartilhadas...</div>
+                  {showResults ? (
+                    <div className="text-xs text-red-500 font-bold">7 imagens suspeitas detectadas</div>
+                  ) : (
+                    <div className="text-xs text-green-700">*{processingStatus}</div>
+                  )}
                 </div>
               </div>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              {!showResults ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              )}
             </div>
           </div>
           
@@ -208,20 +393,50 @@ export default function ProfileMonitor() {
                 </svg>
                 <div>
                   <div className="font-bold">Localizações suspeitas</div>
-                  <div className="text-xs text-green-700">*Analisando dados de localização...</div>
+                  {showResults ? (
+                    <div className="text-xs text-red-500 font-bold">2 localizações suspeitas detectadas</div>
+                  ) : (
+                    <div className="text-xs text-green-700">*{processingStatus}</div>
+                  )}
                 </div>
               </div>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              {!showResults ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              )}
             </div>
           </div>
         </div>
 
         {/* Footer */}
         <div className="text-center text-xs text-green-500 mt-auto">
-          Os dados são processados em tempo real e são estritamente confidenciais
+          {showResults ? (
+            <span className="text-red-500 font-bold">Conteúdo suspeito detectado! Verifique agora.</span>
+          ) : (
+            <span>Os dados são processados em tempo real e são estritamente confidenciais</span>
+          )}
         </div>
+        
+        {/* CTA Button */}
+        {/* {showCtaButton && (
+          <div className="mt-4 text-center">
+            <button 
+              onClick={() => router.push('/instagram')}
+              className="bg-gradient-to-r from-pink-500 to-red-600 hover:from-pink-600 hover:to-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transform transition hover:scale-105 focus:outline-none flex items-center justify-center mx-auto"
+            >
+              <span>VERIFICAR AGORA</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <div className="mt-2 text-xs text-red-500 animate-pulse">Análise completa disponível por tempo limitado!</div>
+          </div>
+        )} */}
       </div>
     </div>
   )

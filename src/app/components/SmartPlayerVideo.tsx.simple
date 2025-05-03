@@ -1,0 +1,123 @@
+'use client'
+
+import React, { useEffect, useRef, useState } from 'react'
+
+interface SmartPlayerVideoProps {
+  onVideoEnd?: () => void
+  onVideoProgress?: (progress: number) => void
+  onVideoDurationChange?: (duration: number) => void
+}
+
+export default function SmartPlayerVideo({ onVideoEnd, onVideoProgress, onVideoDurationChange }: SmartPlayerVideoProps) {
+  const [isMuted, setIsMuted] = useState(true);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const scriptLoadedRef = useRef(false);
+  
+  useEffect(() => {
+    // Apenas uma flag para rastrear se o componente está montado
+    let isMounted = true;
+    
+    // Função simples para monitorar o progresso do vídeo
+    const monitorVideo = () => {
+      if (!isMounted) return;
+      
+      const checkVideo = setInterval(() => {
+        if (!isMounted) {
+          clearInterval(checkVideo);
+          return;
+        }
+        
+        const videoElement = document.querySelector('video');
+        if (!videoElement) return;
+        
+        // Monitorar progresso
+        if (videoElement.duration) {
+          // Atualizar duração total se ainda não foi feito
+          if (timeRemaining === 0 && onVideoDurationChange) {
+            onVideoDurationChange(videoElement.duration);
+            setTimeRemaining(Math.floor(videoElement.duration));
+          }
+          
+          // Calcular e reportar progresso
+          const progress = (videoElement.currentTime / videoElement.duration) * 100;
+          if (onVideoProgress) onVideoProgress(progress);
+          
+          // Atualizar tempo restante
+          const remaining = Math.max(0, Math.floor(videoElement.duration - videoElement.currentTime));
+          setTimeRemaining(remaining);
+          
+          // Verificar se o vídeo terminou
+          if (videoElement.ended || progress > 99.5) {
+            if (onVideoEnd) onVideoEnd();
+            clearInterval(checkVideo);
+          }
+        }
+      }, 1000);
+      
+      return () => clearInterval(checkVideo);
+    };
+    
+    // Função para carregar o script do SmartPlayer
+    const loadScript = () => {
+      if (scriptLoadedRef.current) return;
+      scriptLoadedRef.current = true;
+      
+      const script = document.createElement('script');
+      script.src = 'https://scripts.converteai.net/ac126580-0731-4f45-9424-c0e1a1514295/players/677d9c8eff033f1549b4ef3e/player.js';
+      script.async = true;
+      script.id = 'scr_677d9c8eff033f1549b4ef3e';
+      
+      script.onload = () => {
+        // Esperar um pouco antes de começar a monitorar
+        setTimeout(monitorVideo, 2000);
+      };
+      
+      document.head.appendChild(script);
+    };
+    
+    // Carregar o script se ainda não foi carregado
+    loadScript();
+    
+    // Cleanup
+    return () => {
+      isMounted = false;
+    };
+  }, [onVideoEnd, onVideoProgress, onVideoDurationChange, timeRemaining]);
+  
+  // Função para ativar o som
+  const handleUnmute = () => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      videoElement.muted = false;
+      setIsMuted(false);
+    }
+  };
+  
+  return (
+    <div className="w-full">
+      {/* Container do player de vídeo - estrutura mínima */}
+      <div className="relative w-full rounded-xl overflow-hidden">
+        {/* Div principal do SmartPlayer - NÃO MODIFIQUE ESTE ID */}
+        <div id="vid_677d9c8eff033f1549b4ef3e" style={{ position: 'relative', width: '100%', padding: '56.25% 0 0' }}></div>
+        
+        {/* Botão de ativar som */}
+        {isMuted && (
+          <div 
+            onClick={handleUnmute}
+            className="absolute bottom-4 left-4 bg-black bg-opacity-70 rounded-full p-2 cursor-pointer hover:bg-opacity-90 transition-all duration-200 z-10"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+          </div>
+        )}
+        
+        {/* Timer */}
+        <div className="absolute top-4 right-4 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white font-mono text-sm z-10">
+          {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+        </div>
+      </div>
+    </div>
+  );
+}
