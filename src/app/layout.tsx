@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "WhatsApp Guard",
   description: "WhatsApp Guard",
-};
+}; 
 
 export default function RootLayout({
   children,
