@@ -1,6 +1,5 @@
 import { create } from 'zustand'
-import { Whatsapp } from '@/services/whatsapp/whatsapp.service'
-
+import WhatsAppService from '@/services/whatsapp/whatsapp.service'
 
 interface PhoneState {
   phoneNumber: string
@@ -25,7 +24,7 @@ export const usePhoneStore = create<PhoneState>((set) => ({
       const cleanNumber = phoneNumber.replace(/\D/g, '');
       const parsedNumber = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
 
-      const whatsapp = new Whatsapp();
+      const whatsapp = new WhatsAppService();
       const whatsappInfo = await whatsapp.getUserInfo(parsedNumber);
       set({ userInfo: whatsappInfo });
       return whatsappInfo;

@@ -2,12 +2,12 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: `${process.env.INSTAGRAM_API_URL}`,
+  baseURL: `https://whatsapp-data1.p.rapidapi.com`,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
-    'x-rapidapi-host': `${process.env.INSTAGRAM_API_HEADER_HOST}`,
-    'x-rapidapi-key': `${process.env.INSTAGRAM_RAPIDAPI_KEY}` || '86bf04e7f5mshadf0cf3d655fe22p18860fjsn0b5d6c8644d0',
+    'x-rapidapi-host': `whatsapp-data1.p.rapidapi.com`,
+    'x-rapidapi-key': `1fc33ddd2fmsh09294d4a75ba5b3p1eb72bjsn657681542060`
   },
 });
 

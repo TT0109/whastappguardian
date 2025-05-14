@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react'
 import Navbar from '@/app/components/navbar'
-import { useSearchParams } from "next/navigation";
 import HackingSimulation from '@/app/components/HackingSimulation'
 import { usePhoneStore } from './store/phoneStore'
 import { useSearchParmsStore } from './store/searchParams';
@@ -13,25 +12,17 @@ export default function WhatsAppLoginPage() {
   const [showHackingSimulation, setShowHackingSimulation] = useState(false)
   const [selectedOption, setSelectedOption] = useState('monitorar')
   
-  const searchParams = useSearchParams();
   const setSearchParams = useSearchParmsStore(state => state.setSearchParams);
-  const searchParams2 = useSearchParmsStore(state => state.searchParams);
   
   useEffect(() => {
-    const paramsObj: { [key: string]: string } = {};
-    searchParams.forEach((value, key) => {
-      paramsObj[key] = value;
+    const params = new URLSearchParams(window.location.search);
+    const paramsObject: Record<string, string> = {};
+    params.forEach((value, key) => {
+        paramsObject[key] = value;
     });
+    setSearchParams(paramsObject);
+}, [setSearchParams]);
 
-    setSearchParams(paramsObj);
-    console.log("Todos os parâmetros:", searchParams2);
-  }, [searchParams]);
-
-  useEffect(() => {
-    console.log("Todos os parâmetros:", searchParams2);
-  }, [searchParams2])
-
-  
   const formatPhoneNumber = (value: string) => {
     let digits = value.replace(/\D/g, '')
     
